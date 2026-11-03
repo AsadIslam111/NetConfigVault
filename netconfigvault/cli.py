@@ -11,8 +11,12 @@ from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.table import Table
 
+from rich.syntax import Syntax
+
 from netconfigvault import __version__
 from netconfigvault.core.backup_engine import BackupEngine
+from netconfigvault.core.diff_engine import DiffEngine
+from netconfigvault.core.storage import StorageManager
 from netconfigvault.inventory.loader import InventoryLoader
 from netconfigvault.models.backup import BackupStatus
 from netconfigvault.settings import AppSettings
@@ -116,6 +120,9 @@ def backup(
             duration_text = f"{res.metadata.duration_seconds:.2f}s"
 
         details = res.error or res.message or ""
+        if res.diff and res.diff.has_changes:
+            sec_tags = f" [{', '.join(res.diff.changed_sections)}]" if res.diff.changed_sections else ""
+            details = f"[yellow]{res.diff.summary}{sec_tags}[/yellow]"
         table.add_row(
             res.device_hostname,
             status_text,
@@ -200,6 +207,73 @@ def inventory(
     console.print("\n")
     console.print(table)
     console.print(f"[dim]Inventory source: {settings.inventory_path.resolve()}[/dim]\n")
+
+
+@app.command()
+def diff(
+    hostname: str = typer.Argument(..., help="Hostname of target device"),
+    site: Optional[str] = typer.Option(None, "--site", "-s", help="Site of target device"),
+    output_html: Optional[Path] = typer.Option(None, "--html", "-o", help="Optional path to save HTML report"),
+) -> None:
+    """Compare recent configuration snapshots and visualize changes."""
+    settings = AppSettings.load()
+    loader = InventoryLoader(settings.inventory_path)
+    inv = loader.load()
+
+    # Resolve device from inventory to find site if not provided
+    matched = [d for d in inv.devices if d.hostname.lower() == hostname.lower()]
+    device_site = site or (matched[0].site if matched else "default")
+
+    storage = StorageManager(backup_dir=settings.backup_dir, git_enabled=False)
+    backups = storage.list_backups(hostname, device_site)
+
+    if len(backups) < 2:
+        console.print(
+            f"[yellow]Need at least 2 snapshot backups for {hostname} at site '{device_site}' to compute diff.[/yellow]\n"
+            f"[dim]Found {len(backups)} snapshot(s) in {settings.backup_dir / device_site / hostname}[/dim]"
+        )
+        raise typer.Exit(code=1)
+
+    # Compare the two most recent snapshots
+    prior_path = backups[-2]
+    latest_path = backups[-1]
+
+    old_cfg = prior_path.read_text(encoding="utf-8")
+    new_cfg = latest_path.read_text(encoding="utf-8")
+
+    diff_engine = DiffEngine()
+    result = diff_engine.compare(hostname, old_cfg, new_cfg, generate_html=True)
+
+    console.print(
+        Panel.fit(
+            f"[bold cyan]Configuration Diff Analysis[/bold cyan] for [bold]{hostname}[/bold]\n"
+            f"[dim]Baseline: {prior_path.name}  ⟶  Current: {latest_path.name}[/dim]\n"
+            f"[bold]{result.summary}[/bold]",
+            border_style="cyan",
+        )
+    )
+
+    if not result.has_changes:
+        console.print("[green]✔ Configurations are identical. No differences found.[/green]\n")
+        return
+
+    # Print syntax-colored diff
+    for line in result.unified_diff.splitlines():
+        if line.startswith("+++") or line.startswith("---"):
+            console.print(f"[bold blue]{line}[/bold blue]")
+        elif line.startswith("@@"):
+            console.print(f"[cyan]{line}[/cyan]")
+        elif line.startswith("+"):
+            console.print(f"[green]{line}[/green]")
+        elif line.startswith("-"):
+            console.print(f"[red]{line}[/red]")
+        else:
+            console.print(f"[dim]{line}[/dim]")
+
+    if output_html and result.html_diff:
+        output_html.parent.mkdir(parents=True, exist_ok=True)
+        output_html.write_text(result.html_diff, encoding="utf-8")
+        console.print(f"\n[green]HTML diff report exported to:[/green] [bold]{output_html.resolve()}[/bold]\n")
 
 
 @app.command()

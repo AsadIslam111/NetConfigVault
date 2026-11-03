@@ -7,6 +7,7 @@ from netconfigvault.models.backup import (
     BackupRunSummary,
     BackupStatus,
 )
+from netconfigvault.models.diff import DiffResult, DiffSection
 
 __all__ = [
     "Device",
@@ -17,5 +18,6 @@ __all__ = [
     "BackupResult",
     "BackupRunSummary",
     "BackupStatus",
+    "DiffResult",
+    "DiffSection",
 ]
-

@@ -12,6 +12,7 @@ from netmiko.exceptions import (
     NetmikoTimeoutException,
 )
 
+from netconfigvault.core.diff_engine import DiffEngine
 from netconfigvault.core.storage import StorageManager
 from netconfigvault.credentials.manager import CredentialManager
 from netconfigvault.handlers.registry import get_handler
@@ -22,6 +23,8 @@ from netconfigvault.models.backup import (
     BackupStatus,
 )
 from netconfigvault.models.device import Device, Inventory
+from netconfigvault.models.diff import DiffResult
+from netconfigvault.notifications.dispatcher import Alert, AlertDispatcher, AlertSeverity
 from netconfigvault.settings import AppSettings
 
 logger = logging.getLogger(__name__)
@@ -35,6 +38,8 @@ class BackupEngine:
         settings: AppSettings,
         storage: Optional[StorageManager] = None,
         credential_manager: Optional[CredentialManager] = None,
+        diff_engine: Optional[DiffEngine] = None,
+        alert_dispatcher: Optional[AlertDispatcher] = None,
     ):
         self.settings = settings
         self.storage = storage or StorageManager(
@@ -44,6 +49,8 @@ class BackupEngine:
         self.credential_manager = credential_manager or CredentialManager(
             backend_name=settings.credential_backend
         )
+        self.diff_engine = diff_engine or DiffEngine()
+        self.alert_dispatcher = alert_dispatcher or AlertDispatcher(settings)
 
     def run(
         self,
@@ -149,6 +156,17 @@ class BackupEngine:
                 logger.debug("[%s] Waiting %ds before next retry...", device.hostname, backoff_wait)
                 time.sleep(backoff_wait)
 
+        # Dispatch critical failure alert
+        self.alert_dispatcher.dispatch(
+            Alert(
+                title=f"Backup Failure: {device.hostname}",
+                message=f"Failed to backup {device.hostname} ({device.host}): {last_error or 'Unknown error'}",
+                severity=AlertSeverity.CRITICAL,
+                hostname=device.hostname,
+                details={"host": device.host, "attempts": self.settings.max_retries, "status": last_status.value},
+            )
+        )
+
         return BackupResult(
             device_hostname=device.hostname,
             status=last_status,
@@ -179,6 +197,9 @@ class BackupEngine:
         config_bytes = config_text.encode("utf-8")
         config_hash = hashlib.sha256(config_bytes).hexdigest()
 
+        # Capture prior configuration for diffing before writing new backup
+        prior_content = self.storage.get_latest_config(device.hostname, device.site)
+
         metadata = BackupMetadata(
             hostname=device.hostname,
             host=device.host,
@@ -197,11 +218,42 @@ class BackupEngine:
             metadata=metadata,
         )
 
+        diff_res: Optional[DiffResult] = None
+        # If changes occurred against prior configuration, compute and archive diff
+        if metadata.changed and prior_content:
+            diff_res = self.diff_engine.compare(device.hostname, prior_content, config_text)
+            timestamp_tag = metadata.timestamp.strftime("%Y-%m-%d_%H-%M-%S")
+            self.storage.save_diff(
+                hostname=device.hostname,
+                site=device.site,
+                timestamp_tag=timestamp_tag,
+                diff_text=diff_res.unified_diff,
+                html_content=diff_res.html_diff,
+            )
+
+            # Broadcast change notification
+            self.alert_dispatcher.dispatch(
+                Alert(
+                    title=f"Configuration Modified: {device.hostname}",
+                    message=f"{device.hostname} ({device.site}): {diff_res.summary}",
+                    severity=AlertSeverity.WARNING,
+                    hostname=device.hostname,
+                    details={
+                        "site": device.site,
+                        "platform": device.device_type.value,
+                        "added": diff_res.added_lines,
+                        "removed": diff_res.removed_lines,
+                        "sections": ", ".join(diff_res.changed_sections) or "None",
+                    },
+                )
+            )
+
         return BackupResult(
             device_hostname=device.hostname,
             status=BackupStatus.SUCCESS,
             config_path=saved_path,
             metadata=metadata,
+            diff=diff_res,
             attempts=attempt,
             message="Configuration retrieved and saved successfully.",
         )

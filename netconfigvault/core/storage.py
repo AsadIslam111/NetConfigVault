@@ -106,6 +106,37 @@ class StorageManager:
             logger.info("[%s] Config unchanged. Retaining existing baseline snapshot.", hostname)
             return latest_file
 
+    def save_diff(
+        self,
+        hostname: str,
+        site: str,
+        timestamp_tag: str,
+        diff_text: str,
+        html_content: Optional[str] = None,
+    ) -> Path:
+        """Store unified diff text and HTML visual reports on disk."""
+        device_folder = self.backup_dir / site / hostname
+        device_folder.mkdir(parents=True, exist_ok=True)
+
+        diff_file = device_folder / f"{timestamp_tag}.diff"
+        diff_file.write_text(diff_text, encoding="utf-8")
+
+        if html_content:
+            html_file = device_folder / f"{timestamp_tag}.html"
+            latest_html = device_folder / "latest_diff.html"
+            html_file.write_text(html_content, encoding="utf-8")
+            latest_html.write_text(html_content, encoding="utf-8")
+
+        return diff_file
+
+    def list_backups(self, hostname: str, site: str) -> list[Path]:
+        """Return list of historical snapshot configuration files sorted chronologically."""
+        device_folder = self.backup_dir / site / hostname
+        if not device_folder.exists():
+            return []
+        files = [f for f in device_folder.glob("*.cfg") if f.name != "latest.cfg"]
+        return sorted(files)
+
     def git_commit(self, commit_message: str) -> bool:
         """Commit all updated device configuration files to Git."""
         if not self.git_enabled or not self.repo:

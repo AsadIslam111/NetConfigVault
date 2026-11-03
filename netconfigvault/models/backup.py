@@ -3,8 +3,11 @@
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 from pydantic import BaseModel, Field
+
+
+from netconfigvault.models.diff import DiffResult
 
 
 class BackupStatus(str, Enum):
@@ -36,6 +39,7 @@ class BackupResult(BaseModel):
     message: str = ""
     config_path: Path | None = None
     metadata: BackupMetadata | None = None
+    diff: Optional[DiffResult] = None
     error: str | None = None
     attempts: int = 1
 
