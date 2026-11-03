@@ -1,0 +1,69 @@
+# ==============================================================
+# Cisco IOS / IOS-XE Security & Hardening Baseline Rules
+# Inspired by CIS Cisco IOS Benchmark & Network Security Standards
+# ==============================================================
+
+metadata:
+  name: "Cisco IOS Security Baseline"
+  version: "1.0.0"
+  description: "Core hardening and auditing rules for Cisco IOS and IOS-XE devices"
+  applies_to:
+    - cisco_ios
+    - cisco_xe
+
+rules:
+  - id: "CISCO-SEC-001"
+    name: "SSH Version 2 Mandatory"
+    description: "Ensure SSH version 2 is explicitly enforced (SSH v1 has known cryptographic weaknesses)."
+    severity: "critical"
+    check_type: "must_contain"
+    pattern: "^ip\\s+ssh\\s+version\\s+2"
+    remediation: "configure terminal\nip ssh version 2\nend\nwrite memory"
+
+  - id: "CISCO-SEC-002"
+    name: "No Telnet on Management Lines"
+    description: "Insecure unencrypted Telnet transport must not be allowed on VTY management lines."
+    severity: "critical"
+    check_type: "must_not_contain"
+    pattern: "transport\\s+input.*\\btelnet\\b"
+    remediation: "configure terminal\nline vty 0 15\n transport input ssh\nend\nwrite memory"
+
+  - id: "CISCO-SEC-003"
+    name: "Service Password Encryption"
+    description: "Ensure cleartext passwords in configuration file are encrypted using Cisco Type 7 hash."
+    severity: "high"
+    check_type: "must_contain"
+    pattern: "^service\\s+password-encryption"
+    remediation: "configure terminal\nservice password-encryption\nend\nwrite memory"
+
+  - id: "CISCO-SEC-004"
+    name: "Prohibit Default SNMP Communities"
+    description: "Default community strings like 'public' or 'private' must never be active."
+    severity: "critical"
+    check_type: "must_not_contain"
+    pattern: "^snmp-server\\s+community\\s+(public|private)\\b"
+    remediation: "configure terminal\nno snmp-server community public\nno snmp-server community private\nend\nwrite memory"
+
+  - id: "CISCO-SEC-005"
+    name: "Syslog Remote Logging Configured"
+    description: "Ensure centralized logging is directed to an external syslog server."
+    severity: "medium"
+    check_type: "must_contain"
+    pattern: "^logging\\s+host\\s+\\S+"
+    remediation: "configure terminal\nlogging host <SYSLOG_SERVER_IP>\nend\nwrite memory"
+
+  - id: "CISCO-NET-001"
+    name: "NTP Time Synchronization Configured"
+    description: "Accurate log correlation requires synchronized clocks via at least one NTP server."
+    severity: "high"
+    check_type: "must_contain"
+    pattern: "^ntp\\s+server\\s+\\S+"
+    remediation: "configure terminal\nntp server <NTP_SERVER_IP>\nend\nwrite memory"
+
+  - id: "CISCO-SEC-006"
+    name: "Login Security Banner Configured"
+    description: "A legal warning banner must be presented prior to authentication."
+    severity: "medium"
+    check_type: "must_contain"
+    pattern: "^banner\\s+(login|motd)\\s+"
+    remediation: "configure terminal\nbanner login ^Authorized Access Only. All activities are monitored.^"

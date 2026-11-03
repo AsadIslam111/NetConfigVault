@@ -25,3 +25,4 @@ class DiffResult(BaseModel):
     html_diff: Optional[str] = Field(default=None, description="Styled side-by-side HTML diff table")
     summary: str = Field(default="No changes detected")
     timestamp: datetime = Field(default_factory=datetime.now)
+

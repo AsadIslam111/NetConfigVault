@@ -1,0 +1,68 @@
+# ==============================================================
+# MikroTik RouterOS Security & Hardening Baseline Rules
+# Audits service security, administrative access, and hygiene
+# ==============================================================
+
+metadata:
+  name: "MikroTik RouterOS Security Baseline"
+  version: "1.0.0"
+  description: "Auditing rules for MikroTik RouterOS devices"
+  applies_to:
+    - mikrotik_routeros
+
+rules:
+  - id: "MT-SEC-001"
+    name: "Disable Telnet Service"
+    description: "Cleartext Telnet management port must be disabled."
+    severity: "critical"
+    check_type: "must_contain"
+    pattern: "set\\s+telnet\\s+disabled=yes"
+    remediation: "/ip service set telnet disabled=yes"
+
+  - id: "MT-SEC-002"
+    name: "Disable FTP Service"
+    description: "Unencrypted FTP management service must be disabled."
+    severity: "high"
+    check_type: "must_contain"
+    pattern: "set\\s+ftp\\s+disabled=yes"
+    remediation: "/ip service set ftp disabled=yes"
+
+  - id: "MT-SEC-003"
+    name: "Disable Unencrypted Web Management (HTTP)"
+    description: "Standard HTTP service should be disabled in favor of HTTPS (www-ssl) or Winbox."
+    severity: "high"
+    check_type: "must_contain"
+    pattern: "set\\s+www\\s+disabled=yes"
+    remediation: "/ip service set www disabled=yes"
+
+  - id: "MT-SEC-004"
+    name: "Disable Bandwidth Test Server"
+    description: "Bandwidth-test server should be disabled to prevent bandwidth abuse and DDoS reflection."
+    severity: "high"
+    check_type: "must_contain"
+    pattern: "set\\s+enabled=no.*\\b(btest-server|bandwidth-server)\\b"
+    remediation: "/tool bandwidth-server set enabled=no"
+
+  - id: "MT-SEC-005"
+    name: "Prohibit Blank Admin Passwords"
+    description: "The default admin user must never have an empty password."
+    severity: "critical"
+    check_type: "must_not_contain"
+    pattern: "name=admin.*password=\"\""
+    remediation: "/user set admin password=<STRONG_PASSWORD>"
+
+  - id: "MT-NET-001"
+    name: "NTP Time Client Enabled"
+    description: "Ensure NTP client is enabled for synchronized logging and certificate validity."
+    severity: "medium"
+    check_type: "must_contain"
+    pattern: "(set\\s+enabled=yes.*primary-ntp=|add\\s+.*ntp.*enabled=yes)"
+    remediation: "/system ntp client set enabled=yes servers=<NTP_SERVER>"
+
+  - id: "MT-SEC-006"
+    name: "Restrict DNS Remote Requests"
+    description: "Disable DNS recursion from WAN to prevent open DNS resolver abuse."
+    severity: "critical"
+    check_type: "must_contain"
+    pattern: "set\\s+allow-remote-requests=no"
+    remediation: "/ip dns set allow-remote-requests=no"

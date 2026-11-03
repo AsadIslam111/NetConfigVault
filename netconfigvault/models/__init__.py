@@ -8,6 +8,14 @@ from netconfigvault.models.backup import (
     BackupStatus,
 )
 from netconfigvault.models.diff import DiffResult, DiffSection
+from netconfigvault.models.compliance import (
+    CheckType,
+    ComplianceRule,
+    ComplianceSeverity,
+    DeviceComplianceReport,
+    FleetComplianceSummary,
+    RuleEvaluationResult,
+)
 
 __all__ = [
     "Device",
@@ -20,4 +28,10 @@ __all__ = [
     "BackupStatus",
     "DiffResult",
     "DiffSection",
+    "CheckType",
+    "ComplianceRule",
+    "ComplianceSeverity",
+    "DeviceComplianceReport",
+    "FleetComplianceSummary",
+    "RuleEvaluationResult",
 ]

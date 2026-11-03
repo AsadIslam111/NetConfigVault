@@ -58,3 +58,4 @@ class SlackNotifier:
         except Exception as err:
             logger.error("Failed to post notification to Slack: %s", err)
             return False
+

@@ -81,3 +81,4 @@ Details:
         except Exception as err:
             logger.error("Failed to transmit email notification via %s:%d: %s", self.server, self.port, err)
             return False
+

@@ -14,11 +14,14 @@ from rich.table import Table
 from rich.syntax import Syntax
 
 from netconfigvault import __version__
+from netconfigvault.compliance.engine import ComplianceEngine
+from netconfigvault.compliance.reports import ComplianceReportGenerator
 from netconfigvault.core.backup_engine import BackupEngine
 from netconfigvault.core.diff_engine import DiffEngine
 from netconfigvault.core.storage import StorageManager
 from netconfigvault.inventory.loader import InventoryLoader
 from netconfigvault.models.backup import BackupStatus
+from netconfigvault.models.compliance import ComplianceSeverity
 from netconfigvault.settings import AppSettings
 
 app = typer.Typer(
@@ -274,6 +277,137 @@ def diff(
         output_html.parent.mkdir(parents=True, exist_ok=True)
         output_html.write_text(result.html_diff, encoding="utf-8")
         console.print(f"\n[green]HTML diff report exported to:[/green] [bold]{output_html.resolve()}[/bold]\n")
+
+
+@app.command()
+def compliance(
+    hostname: Optional[str] = typer.Argument(None, help="Device hostname to audit"),
+    fleet: bool = typer.Option(False, "--fleet", "-f", help="Audit all fleet devices"),
+    output_html: Optional[Path] = typer.Option(None, "--html", "-o", help="Optional path to export HTML audit report"),
+) -> None:
+    """Audit configurations against CIS security baselines and policy rules."""
+    settings = AppSettings.load()
+    inv = InventoryLoader(settings.inventory_path).load()
+    storage = StorageManager(backup_dir=settings.backup_dir, git_enabled=False)
+    engine = ComplianceEngine(rules_dir=settings.compliance_rules_dir)
+
+    if fleet or not hostname:
+        summary = engine.evaluate_fleet(inventory=inv, storage=storage)
+        table = Table(
+            title=f"Fleet Compliance Summary (Score: {summary.overall_score}%)",
+            header_style="bold magenta",
+            show_lines=True,
+        )
+        table.add_column("Device", style="cyan bold")
+        table.add_column("Platform", style="magenta")
+        table.add_column("Score", justify="right")
+        table.add_column("Passed", justify="center")
+        table.add_column("Violations", justify="center")
+        table.add_column("Critical Violations", justify="center")
+
+        for r in summary.reports:
+            score_color = "green" if r.score_percent >= 80 else "yellow" if r.score_percent >= 60 else "red"
+            crit_badge = f"[bold red]{len(r.critical_failures)}[/bold red]" if r.critical_failures else "[green]0[/green]"
+            table.add_row(
+                r.hostname,
+                r.device_type,
+                f"[{score_color}]{r.score_percent}%[/{score_color}]",
+                f"[green]{r.passed}[/green] / {r.total_rules}",
+                f"[red]{r.failed}[/red]" if r.failed else "[green]0[/green]",
+                crit_badge,
+            )
+
+        console.print("\n")
+        console.print(table)
+        console.print(
+            f"[bold]Total Evaluated Devices:[/bold] {summary.total_devices} | "
+            f"[green][bold]Fully Compliant:[/bold] {summary.compliant_devices}[/green] | "
+            f"[red][bold]Non-Compliant:[/bold] {summary.non_compliant_devices}[/red] | "
+            f"[bold red]Total Critical Violations:[/bold red] {summary.total_critical_violations}\n"
+        )
+        return
+
+    # Single device audit
+    matched = [d for d in inv.devices if d.hostname.lower() == hostname.lower()]
+    if not matched:
+        console.print(f"[bold red]Device '{hostname}' not found in inventory.[/bold red]")
+        raise typer.Exit(code=1)
+
+    device = matched[0]
+    latest_config = storage.get_latest_config(device.hostname, device.site)
+    if latest_config is None:
+        console.print(f"[bold red]No saved configuration found for '{hostname}'. Run a backup first.[/bold red]")
+        raise typer.Exit(code=1)
+
+    report = engine.evaluate(device, latest_config)
+
+    score_color = "green" if report.score_percent >= 80 else "yellow" if report.score_percent >= 60 else "red"
+    console.print(
+        Panel.fit(
+            f"[bold cyan]Security Compliance Report:[/bold cyan] [bold]{report.hostname}[/bold] ({report.device_type})\n"
+            f"Overall Score: [{score_color} bold]{report.score_percent}%[/{score_color} bold] | "
+            f"Passed: [green]{report.passed}[/green] / {report.total_rules} rules",
+            border_style="cyan",
+        )
+    )
+
+    table = Table(title=f"Rule Audit Details for {hostname}", show_lines=True)
+    table.add_column("Rule ID", style="bold", no_wrap=True)
+    table.add_column("Severity", justify="center")
+    table.add_column("Name")
+    table.add_column("Status", justify="center")
+    table.add_column("Remediation / Details", style="dim", max_width=45)
+
+    for r in report.results:
+        rule = r.rule
+        sev_color = {
+            ComplianceSeverity.CRITICAL: "bold red",
+            ComplianceSeverity.HIGH: "yellow",
+            ComplianceSeverity.MEDIUM: "blue",
+            ComplianceSeverity.LOW: "dim",
+        }.get(rule.severity, "white")
+
+        status_text = "[green]✔ PASS[/green]" if r.passed else "[bold red]✘ FAIL[/bold red]"
+        detail = r.message
+        if not r.passed and rule.remediation:
+            detail = f"[yellow]{rule.remediation.splitlines()[0]}[/yellow]"
+
+        table.add_row(
+            rule.id,
+            f"[{sev_color}]{rule.severity.value.upper()}[/{sev_color}]",
+            rule.name,
+            status_text,
+            detail,
+        )
+
+    console.print("\n")
+    console.print(table)
+    console.print("\n")
+
+    if output_html:
+        html_report = ComplianceReportGenerator.generate_html(report)
+        output_html.parent.mkdir(parents=True, exist_ok=True)
+        output_html.write_text(html_report, encoding="utf-8")
+        console.print(f"[green]HTML compliance report exported to:[/green] [bold]{output_html.resolve()}[/bold]\n")
+
+
+@app.command()
+def api(
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Bind network host"),
+    port: int = typer.Option(8000, "--port", "-p", help="Port number"),
+    reload: bool = typer.Option(False, "--reload", help="Enable auto-reload for dev"),
+) -> None:
+    """Launch NetConfigVault REST API server with interactive Swagger documentation."""
+    import uvicorn
+    console.print(
+        Panel.fit(
+            f"[bold cyan]NetConfigVault REST API Server[/bold cyan]\n"
+            f"Serving at: [bold green]http://{host}:{port}[/bold green]\n"
+            f"Swagger Docs: [bold green]http://{host}:{port}/docs[/bold green]",
+            border_style="cyan",
+        )
+    )
+    uvicorn.run("netconfigvault.api.app:app", host=host, port=port, reload=reload)
 
 
 @app.command()

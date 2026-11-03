@@ -20,6 +20,13 @@
 - **Multi-Channel Alerting**: Instant dispatch of change notifications and critical backup failures via **Slack Webhooks** and **SMTP Email**.
 - **Diff CLI Inspection**: Dedicated `diff` command with syntax-highlighted terminal output.
 
+### 🔴 Tier 3: Enterprise Features
+- **Configuration Compliance Engine**: Evaluates configurations against CIS Benchmark-inspired security baselines (`cisco_security.yml`, `mikrotik_security.yml`).
+- **Policy Checks**: Validates SSH v2 enforcement, unencrypted Telnet/HTTP/FTP prohibitions, password encryption, default SNMP community auditing, and NTP clock synchronization.
+- **Scoring & Remediation**: Automatically calculates compliance scores (0-100%), isolates critical security violations, and provides exact vendor remediation commands.
+- **Visual HTML Audit Reports**: Generates executive-ready HTML compliance cards with rule pass/fail badges.
+- **FastAPI REST API**: Comprehensive REST endpoints for devices, backups, semantic diffs, compliance auditing, and health checks with interactive Swagger UI (`/docs`).
+
 ---
 
 ## 🚀 Quick Start
@@ -46,4 +53,24 @@ python -m netconfigvault.cli diff core-rtr-01
 
 # Generate a standalone visual HTML diff report
 python -m netconfigvault.cli diff edge-gw-01 --html diff_report.html
+```
+
+### 4. Run Security Compliance Audits
+```bash
+# Audit an individual device against security rules
+python -m netconfigvault.cli compliance core-rtr-01
+
+# Audit the entire fleet of devices
+python -m netconfigvault.cli compliance --fleet
+
+# Export visual HTML compliance report
+python -m netconfigvault.cli compliance edge-gw-01 --html compliance_report.html
+```
+
+### 5. Launch the REST API
+```bash
+# Start FastAPI server on port 8000
+python -m netconfigvault.cli api --port 8000
+
+# Open interactive Swagger UI: http://127.0.0.1:8000/docs
 ```

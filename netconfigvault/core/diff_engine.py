@@ -205,3 +205,4 @@ class DiffEngine:
             html_diff=html_output,
             summary=summary,
         )
+

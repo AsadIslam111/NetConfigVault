@@ -65,3 +65,4 @@ class AlertDispatcher:
                 logger.error("Exception in alert channel %s: %s", type(channel).__name__, e)
 
         return dispatched_count
+
