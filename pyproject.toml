@@ -1,0 +1,44 @@
+[project]
+name = "netconfigvault"
+version = "0.1.0"
+description = "Automated network device configuration backup with compliance checking"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "netmiko>=4.3.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1",
+    "typer[all]>=0.9.0",
+    "rich>=13.0",
+    "gitpython>=3.1.40",
+    "python-dotenv>=1.0.0",
+    "jinja2>=3.1.0",
+]
+
+[project.optional-dependencies]
+notifications = [
+    "requests>=2.31.0",
+]
+api = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+ncv = "netconfigvault.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["netconfigvault*"]
+exclude = ["config*", "tests*", "logs*", "backups*"]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"

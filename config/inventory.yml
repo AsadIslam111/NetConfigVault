@@ -1,0 +1,53 @@
+# ==============================================================
+# NetConfigVault Device Inventory
+# ==============================================================
+# Supported device_type values:
+#   - cisco_ios
+#   - cisco_xe
+#   - mikrotik_routeros
+
+devices:
+  # --- Cisco Core & Distribution Devices ---
+  - hostname: core-rtr-01
+    host: 192.168.1.1
+    device_type: cisco_ios
+    port: 22
+    site: dc-east
+    role: core-router
+    groups: [production, core, critical]
+
+  - hostname: dist-sw-01
+    host: 192.168.10.1
+    device_type: cisco_ios
+    port: 22
+    site: dc-east
+    role: distribution-switch
+    groups: [production, access]
+
+  # --- MikroTik Edge & Branch Devices ---
+  - hostname: edge-gw-01
+    host: 192.168.1.10
+    device_type: mikrotik_routeros
+    port: 22
+    site: dc-east
+    role: edge-router
+    groups: [production, edge, critical]
+
+  - hostname: branch-rtr-01
+    host: 10.10.1.1
+    device_type: mikrotik_routeros
+    port: 22
+    site: branch-north
+    role: branch-router
+    groups: [production, branch]
+
+  # --- Disabled Lab Device ---
+  - hostname: lab-sw-01
+    host: 172.16.100.1
+    device_type: cisco_ios
+    port: 22
+    site: lab
+    role: test-switch
+    groups: [lab]
+    enabled: false
+

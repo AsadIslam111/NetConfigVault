@@ -1,0 +1,21 @@
+# ==============================================================
+# NetConfigVault Application Settings
+# ==============================================================
+
+# Directories
+backup_dir: "backups"
+log_dir: "logs"
+
+# Concurrency & Performance
+max_concurrent_devices: 5
+connection_timeout: 30
+command_timeout: 120
+max_retries: 3
+
+# Version Control
+git_enabled: true
+git_auto_commit: true
+
+# Credential Backend ("dotenv", "env", "keyring")
+credential_backend: "dotenv"
+
